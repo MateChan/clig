@@ -1,0 +1,17 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go tool templ generate && go build -o /tmp/clig"
+bin = "/tmp/clig"
+args_bin = ["samples"]
+include_ext = ["go", "templ", "css", "js"]
+exclude_regex = ["_templ\\.go"]
+
+[proxy]
+enabled = true
+app_port = 9411
+proxy_port = 9412
+
+[misc]
+clean_on_exit = true

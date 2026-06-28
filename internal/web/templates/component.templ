@@ -1,0 +1,182 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/MateChan/clig/internal/models"
+)
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/static/css/style.css"/>
+			<link rel="stylesheet" href="/static/js/photoswipe/photoswipe.css"/>
+			<script>
+				(function() {
+					const savedTheme = localStorage.getItem('theme') || 'dark';
+					if (savedTheme === 'light') {
+						document.documentElement.setAttribute('data-theme', 'light');
+					}
+				})();
+			</script>
+		</head>
+		<body>
+			{ children... }
+			<script type="module" src="/static/js/main.js"></script>
+		</body>
+	</html>
+}
+
+templ Page(tree *models.DirNode, rootPath string) {
+	@Layout("Gallery - " + rootPath) {
+		<div class="app-container">
+			@Sidebar(tree, rootPath)
+			@MainContent()
+		</div>
+	}
+}
+
+templ Sidebar(tree *models.DirNode, rootPath string) {
+	<aside class="sidebar">
+		<div class="sidebar-header">
+			<div class="logo">{ models.APP_NAME }</div>
+			<div class="root-info" title={ rootPath }>{ rootPath }</div>
+		</div>
+		<nav class="folder-tree">
+			@FolderNode(tree, true)
+		</nav>
+		<div class="sidebar-footer">
+			<button id="theme-toggle" class="control-btn footer-btn" aria-label="Toggle light and dark theme">
+				Theme
+			</button>
+			<a href="/?refresh=true" class="rescan-btn footer-btn" title="Rescan folders">Rescan</a>
+		</div>
+	</aside>
+}
+
+templ FolderNode(node *models.DirNode, isRoot bool) {
+	<div class="tree-node" data-hash={ node.Hash }>
+		<div class="tree-row-wrapper">
+			if len(node.Children) > 0 {
+				<button class="toggle-btn" aria-label="Toggle folder">
+					<svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
+					</svg>
+				</button>
+			} else {
+				<span class="toggle-placeholder"></span>
+			}
+			<div class="tree-label" data-hash={ node.Hash } data-has-images={ templ.JSONString(node.HasImages) }>
+				<span class="folder-indicator">
+					if isRoot {
+						[Root]
+					} else {
+						[Dir]
+					}
+				</span>
+				<span class="folder-name">{ node.Name }</span>
+			</div>
+		</div>
+		if len(node.Children) > 0 {
+			<div class="tree-children hidden">
+				for _, child := range node.Children {
+					@FolderNode(child, false)
+				}
+			</div>
+		}
+	</div>
+}
+
+templ MainContent() {
+	<main class="main-content">
+		@TopBar()
+		@GalleryWrapper()
+	</main>
+}
+
+templ TopBar() {
+	<header class="top-bar">
+		<div class="header-left">
+			<button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle sidebar">
+				<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"></path>
+				</svg>
+			</button>
+			<div class="header-title-group">
+				<h1 id="current-folder-title">&nbsp;</h1>
+				<span class="stats" id="gallery-stats"></span>
+			</div>
+		</div>
+		<div class="header-controls">
+			<div class="control-item">
+				<span class="control-label">Size</span>
+				<input type="range" id="grid-size-slider" min="120" max="400" value="220" step="10" aria-label="Grid size slider"/>
+			</div>
+		</div>
+	</header>
+}
+
+templ GalleryWrapper() {
+	<div class="gallery-wrapper">
+		<div class="gallery-grid" id="gallery-grid"></div>
+		<div id="sentinel" class="sentinel hidden">
+			<div class="spinner"></div>
+		</div>
+	</div>
+}
+
+templ ImageCard(img models.ImageInfo) {
+	<a
+		href={ templ.URL(fmt.Sprintf("/image?hash=%s&t=%d", img.Hash, img.ModifiedAt.Unix())) }
+		class="image-card"
+		data-pswp-width={ templ.JSONString(img.Width) }
+		data-pswp-height={ templ.JSONString(img.Height) }
+		target="_blank"
+		rel="noreferrer"
+	>
+		<div class="image-thumbnail-container">
+			<img src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox%3D'0 0 300 200'%2F%3E" data-src={ fmt.Sprintf("/thumbnail?hash=%s&t=%d", img.Hash, img.ModifiedAt.Unix()) } alt={ img.Name } class="image-thumbnail lazy-img"/>
+			<div class="image-overlay">
+				<div class="image-meta-quick">
+					<span>{ formatSize(img.Size) }</span>
+				</div>
+			</div>
+		</div>
+		<div class="image-info">
+			<div class="image-name" title={ img.Name }>{ img.Name }</div>
+			<div class="image-meta-details">
+				<span>{ templ.JSONString(img.Width) }×{ templ.JSONString(img.Height) }</span>
+			</div>
+		</div>
+		@PhotoSwipeCaption(img)
+	</a>
+}
+
+templ PhotoSwipeCaption(img models.ImageInfo) {
+	<div class="pswp-caption-content hidden">
+		<div class="pswp-caption-title">{ img.Name }</div>
+		<table class="pswp-meta-table">
+			<tr>
+				<th>Resolution</th>
+				<td>{ templ.JSONString(img.Width) } x { templ.JSONString(img.Height) }</td>
+			</tr>
+			<tr>
+				<th>File Size</th>
+				<td>{ formatSize(img.Size) }</td>
+			</tr>
+			<tr>
+				<th>Last Modified</th>
+				<td>{ img.ModifiedAt.Format("2006-01-02 15:04:05") }</td>
+			</tr>
+		</table>
+	</div>
+}
+
+templ ImageCards(images []models.ImageInfo) {
+	for _, img := range images {
+		@ImageCard(img)
+	}
+}
